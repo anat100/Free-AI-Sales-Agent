@@ -142,6 +142,4 @@ This workflow processes personal data (name, email, job title) and sends part of
 - ICP scoring is an LLM judgment. Treat it as a triage signal, not a decision.
 - Node parameters can differ slightly between n8n versions. If an import shows a field warning, re-select the value in the UI.
 
-## License
 
-MIT, see [LICENSE](LICENSE).
