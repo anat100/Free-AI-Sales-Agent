@@ -1,0 +1,52 @@
+{
+  "name": "GTM AI Agent - Error Handler",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "52812f3a-c753-56d7-8f63-31657480c399",
+      "name": "Error Trigger"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "REPLACE_WITH_YOUR_SLACK_OR_DISCORD_WEBHOOK_URL",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ text: 'n8n failure: ' + $json.workflow.name + ' / node: ' + ($json.execution.lastNodeExecuted || 'n/a') + ' / ' + ($json.execution.error?.message || 'unknown error'), content: 'n8n failure: ' + $json.workflow.name + ' / node: ' + ($json.execution.lastNodeExecuted || 'n/a') + ' / ' + ($json.execution.error?.message || 'unknown error') }) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        240,
+        0
+      ],
+      "id": "031e4ccf-5cde-5b07-9691-ee301afa9f41",
+      "name": "Notify Failure"
+    }
+  ],
+  "connections": {
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Notify Failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}

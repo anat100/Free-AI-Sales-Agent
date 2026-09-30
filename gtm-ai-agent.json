@@ -1,0 +1,432 @@
+{
+  "name": "GTM AI Agent - Lead Enrichment & ICP Scoring",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## GTM AI Agent\nInbound lead → research → ICP score → HubSpot + Slack/Discord.\n\n**Before activating**\n1. Attach credentials: Groq, Tavily (Header Auth), HubSpot App Token\n2. Paste your Slack/Discord webhook URL into the notification node\n3. Create the HubSpot custom properties (see README)\n4. Edit the ICP definition in the agent's system message",
+        "height": 230,
+        "width": 420
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -40,
+        60
+      ],
+      "id": "f08c6e0d-1bc8-56f2-b8a1-65f44bd3ac9e",
+      "name": "Note: Setup"
+    },
+    {
+      "parameters": {
+        "content": "**Free-tier tip:** Groq's free tier has a tokens-per-minute cap. Max Iterations is 3 and the agent retries on failure. Send leads one at a time while testing.",
+        "height": 110,
+        "width": 360
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        640,
+        700
+      ],
+      "id": "5b5847fc-16e8-50ff-89a2-baa4cdc23354",
+      "name": "Note: Rate limits"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "lead",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        400
+      ],
+      "id": "964e872b-f2f5-56d0-b17f-02ab92a250fe",
+      "name": "Inbound Lead Webhook",
+      "webhookId": "77898e0d-165e-53c7-a078-da4583c6839b"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "35efbcce-be72-58fa-8b11-fde2b9ad3e4d",
+              "name": "name",
+              "value": "={{ String($json.body.name || '').trim() }}",
+              "type": "string"
+            },
+            {
+              "id": "68c9e310-a7cb-5ad6-ad4a-86a8cb61afec",
+              "name": "firstname",
+              "value": "={{ String($json.body.name || '').trim().split(' ')[0] }}",
+              "type": "string"
+            },
+            {
+              "id": "19211b60-3ce6-559d-9285-9efd7695125f",
+              "name": "lastname",
+              "value": "={{ String($json.body.name || '').trim().split(' ').slice(1).join(' ') }}",
+              "type": "string"
+            },
+            {
+              "id": "06f92653-21be-5894-bae6-66961b059bdd",
+              "name": "title",
+              "value": "={{ String($json.body.title || '').trim() }}",
+              "type": "string"
+            },
+            {
+              "id": "e3982bcf-8968-5b0c-8c55-d5bcda21789a",
+              "name": "email",
+              "value": "={{ String($json.body.email || '').trim().toLowerCase() }}",
+              "type": "string"
+            },
+            {
+              "id": "46206366-4364-506e-a4fe-99e832fa2848",
+              "name": "email_domain",
+              "value": "={{ String($json.body.email || '').split('@')[1] || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "4808938e-d30f-5567-8ac8-498dfe794060",
+              "name": "company",
+              "value": "={{ String($json.body.company || '').trim() }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        240,
+        400
+      ],
+      "id": "c1c30f49-e8d0-5450-be99-abf49609e3bd",
+      "name": "Normalize Lead Data"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c0f177f6-4b0b-57c9-a9f6-18f8dc14b119",
+              "leftValue": "={{ $json.email }}",
+              "rightValue": "^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$",
+              "operator": {
+                "type": "string",
+                "operation": "regex"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        480,
+        400
+      ],
+      "id": "eb90e613-cfcc-5e6d-bc7a-dd7a3a84bb14",
+      "name": "Valid Email?"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        720,
+        620
+      ],
+      "id": "42a91a1b-dac4-5659-aeb7-74f625b06444",
+      "name": "Skip: Invalid Lead"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=LEAD\nName: {{ $json.name }}\nTitle: {{ $json.title }}\nCompany: {{ $json.company }}\nEmail domain: {{ $json.email_domain }}",
+        "options": {
+          "systemMessage": "You are an expert Sales Operations and GTM research agent.\n\nYOUR JOB\n1. Use the TavilySearch tool AT MOST ONCE to research the lead's company: what it does, its industry and its approximate employee count. Pass a short plain-text query such as \"<company> company overview industry employees\".\n2. Evaluate ICP fit as exactly one of: High, Medium, Low, Unknown.\n3. Draft a personalized 2-sentence outreach opener addressed to the lead's first name.\n\nICP DEFINITION (edit this section for your business)\n- B2B companies, ideally software or technology\n- Roughly 50-1000 employees\n- The lead's job title suggests responsibility for sales, revenue, marketing or operations\n\nRULES\n- Never invent facts. If the company is missing, unknown, or the search finds nothing reliable, set icp_fit to \"Unknown\" and explain briefly in icp_reasoning.\n- If the email is from a free provider (gmail.com, outlook.com, gmx.de, etc.) and no company is given, do not search. Use \"Unknown\".\n- Never call the tool more than once.\n\nOUTPUT FORMAT\nReturn ONLY a valid JSON object. No markdown, no code fences, no text before or after. Use exactly these keys:\n{\"company_summary\": \"...\", \"industry\": \"...\", \"employee_range\": \"...\", \"icp_fit\": \"High|Medium|Low|Unknown\", \"icp_reasoning\": \"...\", \"outreach_message\": \"...\"}",
+          "maxIterations": 3
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [
+        720,
+        400
+      ],
+      "id": "ef8bbd60-0424-5b60-9f02-98423d853307",
+      "name": "GTM AI Agent",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "model": "llama-3.3-70b-versatile",
+        "options": {
+          "temperature": 0
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+      "typeVersion": 1,
+      "position": [
+        700,
+        640
+      ],
+      "id": "bfd0fc10-4ae5-5c6e-9051-b11c329e4bff",
+      "name": "Groq Chat Model",
+      "credentials": {
+        "groqApi": {
+          "id": "REPLACE_ME",
+          "name": "Groq account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "toolDescription": "Search the web for company information. Provide a concise plain-text search query, e.g. \"Acme Corp industry employee count funding\".",
+        "method": "POST",
+        "url": "https://api.tavily.com/search",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "keypair",
+        "parametersBody": {
+          "values": [
+            {
+              "name": "query",
+              "value": "{query}"
+            },
+            {
+              "name": "search_depth",
+              "value": "basic"
+            },
+            {
+              "name": "max_results",
+              "value": "2"
+            },
+            {
+              "name": "include_answer",
+              "value": "true"
+            }
+          ]
+        },
+        "placeholderDefinitions": {
+          "values": [
+            {
+              "name": "query",
+              "description": "The web search query about the company, e.g. \"Acme Corp industry employee count funding\"",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1,
+      "position": [
+        860,
+        640
+      ],
+      "id": "f085cb28-1a48-554c-88a3-d98c2831631a",
+      "name": "TavilySearch",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_ME",
+          "name": "Tavily Header Auth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const lead = $('Normalize Lead Data').first().json;\nlet raw = $input.first().json.output;\nif (raw === undefined || raw === null) raw = '';\nif (typeof raw !== 'string') raw = JSON.stringify(raw);\nraw = raw.replace(/```json|```/gi, '').trim();\n\nlet parsed = {};\nlet parseError = false;\ntry {\n  const start = raw.indexOf('{');\n  const end = raw.lastIndexOf('}');\n  parsed = JSON.parse(raw.slice(start, end + 1));\n} catch (e) {\n  parseError = true;\n}\n\nconst fits = ['High', 'Medium', 'Low', 'Unknown'];\nconst fitRaw = String(parsed.icp_fit || 'Unknown').trim();\nconst icpFit = fits.find(f => f.toLowerCase() === fitRaw.toLowerCase()) || 'Unknown';\nconst clean = (v, max) => String(v === undefined || v === null ? '' : v).slice(0, max);\n\nconst result = {\n  ...lead,\n  company_summary: clean(parsed.company_summary, 1000),\n  industry: clean(parsed.industry, 200),\n  employee_range: clean(parsed.employee_range, 100),\n  icp_fit: icpFit,\n  icp_reasoning: clean(parsed.icp_reasoning, 1000),\n  outreach_message: clean(parsed.outreach_message, 1000),\n  parse_error: parseError,\n};\n\nconst icon = { High: '🟢', Medium: '🟡', Low: '🔴', Unknown: '⚪' }[icpFit];\nconst lines = [\n  `${icon} New lead: ${lead.name || 'n/a'} (${lead.title || 'no title'}) at ${lead.company || 'no company'}`,\n  `ICP fit: ${icpFit} | Industry: ${result.industry || 'n/a'} | Size: ${result.employee_range || 'n/a'}`,\n  `Why: ${result.icp_reasoning || 'n/a'}`,\n  `Draft opener: ${result.outreach_message || 'n/a'}`,\n];\nif (parseError) lines.push('⚠️ The AI output could not be parsed. Check the execution.');\nresult.notification_text = lines.join('\\n');\n\nreturn [{ json: result }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1040,
+        400
+      ],
+      "id": "06444eb3-6eec-5431-a223-f32b6d0d7e18",
+      "name": "Parse AI Output"
+    },
+    {
+      "parameters": {
+        "resource": "contact",
+        "operation": "upsert",
+        "email": "={{ $json.email }}",
+        "authentication": "appToken",
+        "additionalFields": {
+          "firstName": "={{ $json.firstname }}",
+          "lastName": "={{ $json.lastname }}",
+          "jobTitle": "={{ $json.title }}",
+          "companyName": "={{ $json.company }}",
+          "customPropertiesUi": {
+            "customPropertiesValues": [
+              {
+                "property": "icp_fit",
+                "value": "={{ $json.icp_fit }}"
+              },
+              {
+                "property": "icp_reasoning",
+                "value": "={{ $json.icp_reasoning }}"
+              },
+              {
+                "property": "ai_outreach_draft",
+                "value": "={{ $json.outreach_message }}"
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.hubspot",
+      "typeVersion": 2.1,
+      "position": [
+        1300,
+        300
+      ],
+      "id": "ad7d9201-8667-587d-9933-e8f64e926f23",
+      "name": "Upsert Contact in HubSpot",
+      "credentials": {
+        "hubspotAppToken": {
+          "id": "REPLACE_ME",
+          "name": "HubSpot App Token"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "REPLACE_WITH_YOUR_SLACK_OR_DISCORD_WEBHOOK_URL",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ text: $json.notification_text, content: $json.notification_text }) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1300,
+        500
+      ],
+      "id": "d9e6db8f-21cb-552d-b85b-fda6f6cf8f7c",
+      "name": "Slack/Discord Notification",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    }
+  ],
+  "connections": {
+    "Inbound Lead Webhook": {
+      "main": [
+        [
+          {
+            "node": "Normalize Lead Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Lead Data": {
+      "main": [
+        [
+          {
+            "node": "Valid Email?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Valid Email?": {
+      "main": [
+        [
+          {
+            "node": "GTM AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Skip: Invalid Lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GTM AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Parse AI Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "GTM AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "TavilySearch": {
+      "ai_tool": [
+        [
+          {
+            "node": "GTM AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse AI Output": {
+      "main": [
+        [
+          {
+            "node": "Upsert Contact in HubSpot",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Slack/Discord Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  }
+}
